@@ -2,7 +2,6 @@ provider "aws" {
   region = "eu-central-1"
 }
 
-# Create VPC
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
   tags = {
@@ -234,4 +233,41 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
 
 resource "aws_cloudwatch_log_group" "app_logs" {
   name = "ac-logs"
+}
+
+resource "aws_iam_role" "lambda_exec_role" {
+  name = "lambda_exec_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
+  role       = aws_iam_role.lambda_exec_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_lambda_function" "hello_world_lambda" {
+  function_name = "hello_world_lambda"
+  role          = aws_iam_role.lambda_exec_role.arn
+  handler       = "hello-world"  
+  runtime       = "go1.x"
+  filename      = "lambda.zip"
+
+  source_code_hash = filebase64sha256("lambda.zip")
+}
+
+resource "aws_lambda_permission" "allow_invoke" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.hello_world_lambda.function_name
+  principal     = "apigateway.amazonaws.com"
 }
